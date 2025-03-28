@@ -1,4 +1,5 @@
-pub mod search;
+mod changelog;
+mod search;
 
 use {
     base64::prelude::{Engine, BASE64_STANDARD as b64},
