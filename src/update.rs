@@ -12,7 +12,7 @@ use crate::storage;
 pub fn check_updates_with_interval(
     user_cfg: &UserConfig,
     packages: &HashSet<String>,
-    pathout: &str,
+    pathout: Option<&str>,
     interval: Option<u64>,
 ) -> Result<()> {
     loop {
@@ -34,7 +34,7 @@ pub fn check_updates_with_interval(
 pub fn check_updates(
     user_cfg: &UserConfig,
     packages: &HashSet<String>,
-    pathout: &str,
+    pathout: Option<&str>,
 ) -> Result<()> {
     let response = send_update_request(user_cfg, packages)?;
     let cache_dir = storage::get_cache_dir()?;

@@ -41,12 +41,13 @@ pub fn save_cached_response(cache_dir: &Path, response: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn process_server_response(response: &str, pathout: &str) -> Result<()> {
+pub fn process_server_response(response: &str, pathout: Option<&str>) -> Result<()> {
     let mut generator = ChangelogGenerator::new();
     generator.parse_response(response)?;
 
     // Directly save the output to pathout without creating an intermediate string
-    generator.save_report_to(pathout)?;
-
+    if let Some(pathout) = pathout {
+        generator.save_report_to(pathout)?;
+    }
     Ok(())
 }

@@ -19,7 +19,7 @@ pub fn build_cli() -> Command {
                     Arg::new("pathout")
                         .short('o')
                         .long("output")
-                        .required(true)
+                        .required(false)
                         .help("Path to save human-readable report"),
                 )
                 .arg(
