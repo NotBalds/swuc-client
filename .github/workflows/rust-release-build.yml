@@ -23,7 +23,7 @@ jobs:
             static_linking: true
           - target: x86_64-apple-darwin
             archive_type: zip
-            static_linking: true
+            static_linking: false
 
     steps:
     - name: Checkout repository
