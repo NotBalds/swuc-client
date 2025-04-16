@@ -1,3 +1,5 @@
 /target
 /user.json
 /Cargo.lock
+/pkgs
+/out
