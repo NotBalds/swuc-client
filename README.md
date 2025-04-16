@@ -13,7 +13,7 @@ cargo install swuc
 Или сборка из исходного кода:
 
 ```bash
-git clone https://github.com/username/swuc.git
+git clone https://github.com/NotBalds/swuc.git
 cd swuc
 cargo build --release
 ```
@@ -35,7 +35,7 @@ cargo build --release
   "url": "wss://updates.example.com/api/check",
   "uuid": "ваш-уникальный-идентификатор",
   "secret": "ваш-секретный-ключ",
-  "public": "ваш-публичный-ключ"
+  "public": "серверный-публичный-ключ"
 }
 ```
 
