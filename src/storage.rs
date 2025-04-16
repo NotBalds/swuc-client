@@ -49,5 +49,6 @@ pub fn process_server_response(response: &str, pathout: Option<&str>) -> Result<
     if let Some(pathout) = pathout {
         generator.save_report_to(pathout)?;
     }
+
     Ok(())
 }
