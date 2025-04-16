@@ -24,9 +24,6 @@ jobs:
           - target: x86_64-apple-darwin
             archive_type: zip
             static_linking: true
-          - target: wasm32-wasi
-            archive_type: tar.gz
-            static_linking: false
 
     steps:
     - name: Checkout repository
@@ -46,7 +43,7 @@ jobs:
         TOOLCHAIN_VERSION: "stable"
         STATIC_LINKING: ${{ matrix.static_linking }}
         UPLOAD_MODE: "release"
-        EXTRA_COMMAND_FLAGS: "--release --locked"
+        EXTRA_COMMAND_FLAGS: "--locked"
 
     - name: Show build outputs
       run: |
