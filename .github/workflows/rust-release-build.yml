@@ -1,0 +1,54 @@
+name: Release Build
+
+on:
+  release:
+    types: [created]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cross-platform-build:
+    name: Build ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-gnu
+            archive_type: zip
+            static_linking: true
+          - target: x86_64-unknown-linux-musl
+            archive_type: tar.gz tar.xz
+            static_linking: true
+          - target: x86_64-apple-darwin
+            archive_type: zip
+            static_linking: true
+          - target: wasm32-wasi
+            archive_type: tar.gz
+            static_linking: false
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Build and package release
+      id: build
+      uses: rust-build/rust-build.action@v1.4.5
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RUSTFLAGS: "-C target-feature=+crt-static"
+      with:
+        RUSTTARGET: ${{ matrix.target }}
+        ARCHIVE_TYPES: ${{ matrix.archive_type }}
+        EXTRA_FILES: "README.md LICENSE"
+        MINIFY: "true"
+        TOOLCHAIN_VERSION: "stable"
+        STATIC_LINKING: ${{ matrix.static_linking }}
+        UPLOAD_MODE: "release"
+        EXTRA_COMMAND_FLAGS: "--release --locked"
+
+    - name: Show build outputs
+      run: |
+        echo "Generated archive: ${{ steps.build.outputs.BUILT_ARCHIVE }}"
+        echo "Checksum file: ${{ steps.build.outputs.BUILT_CHECKSUM }}"
