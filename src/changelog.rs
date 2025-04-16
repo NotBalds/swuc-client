@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+#[allow(unused)]
 #[derive(Debug, Deserialize)]
 struct Package {
     error: Option<String>,
@@ -16,6 +17,7 @@ struct Package {
     sources: Vec<String>,
 }
 
+#[allow(unused)]
 #[derive(Debug, Deserialize)]
 struct Metadata {
     analysis_time: String,
