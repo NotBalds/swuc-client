@@ -43,7 +43,6 @@ jobs:
         TOOLCHAIN_VERSION: "stable"
         STATIC_LINKING: ${{ matrix.static_linking }}
         UPLOAD_MODE: "release"
-        EXTRA_COMMAND_FLAGS: "--locked"
 
     - name: Show build outputs
       run: |
