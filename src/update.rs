@@ -31,6 +31,7 @@ pub fn check_updates_with_interval(
     Ok(())
 }
 
+// Function to iteract with API
 pub fn check_updates(
     user_cfg: &UserConfig,
     packages: &HashSet<String>,
