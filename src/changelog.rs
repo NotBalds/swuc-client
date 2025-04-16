@@ -147,3 +147,9 @@ impl ChangelogGenerator {
         Ok(())
     }
 }
+
+impl Default for ChangelogGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
