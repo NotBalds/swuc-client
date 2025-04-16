@@ -1,192 +1,149 @@
+use anyhow::{Context, Result};
 use chrono::Local;
-use serde::{Deserialize, Serialize};
+use dirs::desktop_dir;
+use serde::Deserialize;
 use std::collections::HashMap;
-use std::error::Error;
 use std::fs;
+use std::path::{Path, PathBuf};
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Software {
-    pub name: String,
-    pub version: String,
-    pub raw_version_info: String,
-    pub token_usage: u32,
-    pub token_cost: f64,
-    pub sources: Vec<String>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct SoftwareResponse {
-    pub status: String,
-    pub software: Vec<Software>,
-}
-
-#[derive(Debug)]
-pub struct ChangelogEntry {
-    pub name: String,
-    pub old_version: String,
-    pub new_version: String,
-    pub sources: Vec<String>,
+#[derive(Debug, Deserialize)]
+struct PackageInfo {
+    error: Option<serde_json::Value>,
+    name: String,
+    version: String,
+    sources: Vec<String>,
+    metadata: serde_json::Value,
 }
 
 pub struct ChangelogGenerator {
-    version_db: HashMap<String, String>, // Simplified to just name -> version
-    software_db: HashMap<String, Software>, // Full software info
-    changelog_entries: Vec<ChangelogEntry>,
+    short_changelog: String,
+    long_changelog: String,
+    packages: Vec<PackageInfo>,
 }
 
 impl ChangelogGenerator {
     pub fn new() -> Self {
-        ChangelogGenerator {
-            version_db: HashMap::new(),
-            software_db: HashMap::new(),
-            changelog_entries: Vec::new(),
+        Self {
+            short_changelog: String::new(),
+            long_changelog: String::new(),
+            packages: Vec::new(),
         }
     }
 
-    pub fn load_existing_versions(&mut self, path: &str) -> Result<(), Box<dyn Error>> {
-        if let Ok(contents) = fs::read_to_string(path) {
-            match serde_json::from_str::<HashMap<String, String>>(&contents) {
-                Ok(versions) => {
-                    self.version_db = versions;
-                    Ok(())
+    pub fn parse_response(&mut self, response: &str) -> Result<()> {
+        self.packages = serde_json::from_str(response)
+            .context("Failed to parse package information from response")?;
+
+        // Get desktop directory for the current versions file
+        let desktop =
+            desktop_dir().ok_or_else(|| anyhow::anyhow!("Desktop directory not found"))?;
+        let current_versions_path = desktop.join("swuc_current.txt");
+
+        // Generate changelog
+        self.generate_changelog(&current_versions_path)?;
+
+        Ok(())
+    }
+
+    fn generate_changelog(&mut self, current_versions_path: &Path) -> Result<()> {
+        // Load saved versions
+        let saved_versions = self.read_saved_versions(current_versions_path);
+        let mut new_versions = Vec::new(); // To preserve order from JSON
+
+        for package in &self.packages {
+            let name = &package.name;
+            let new_version = &package.version;
+            new_versions.push((name.clone(), new_version.clone()));
+
+            let old_version = saved_versions.get(name);
+            if old_version != Some(new_version) {
+                // Format short changelog entry
+                let old_display = old_version.map(String::as_str).unwrap_or("");
+                self.short_changelog
+                    .push_str(&format!("{} {} -> {}\n", name, old_display, new_version));
+
+                // Format long changelog entry
+                self.long_changelog
+                    .push_str(&format!("{} {} -> {}\n", name, old_display, new_version));
+                self.long_changelog.push_str("| - Sources:\n");
+                for source in &package.sources {
+                    self.long_changelog
+                        .push_str(&format!("    | - {}\n", source));
                 }
-                Err(e) => Err(format!("Failed to parse software.json: {}", e).into()),
+                self.long_changelog.push('\n');
             }
-        } else {
-            println!("No existing version file found. Starting fresh.");
-            Ok(())
-        }
-    }
-
-    pub fn save_updated_versions(&self, path: &str) -> Result<(), Box<dyn Error>> {
-        // Create a new HashMap with just the current versions
-        let mut current_versions = HashMap::new();
-        for (name, software) in &self.software_db {
-            current_versions.insert(name.clone(), software.version.clone());
         }
 
-        let json = serde_json::to_string_pretty(&current_versions)?;
-        fs::write(path, json)?;
+        // Save new versions to swuc_current.txt
+        let new_versions_content: String = new_versions
+            .iter()
+            .map(|(name, version)| format!("{}: {}\n", name, version))
+            .collect();
+
+        fs::write(current_versions_path, new_versions_content).with_context(|| {
+            format!(
+                "Failed to write current versions to {:?}",
+                current_versions_path
+            )
+        })?;
+
+        // Save long changelog if there are changes
+        if !self.long_changelog.is_empty() {
+            let desktop =
+                desktop_dir().ok_or_else(|| anyhow::anyhow!("Desktop directory not found"))?;
+            let reports_dir = desktop.join("swuc-reports");
+            fs::create_dir_all(&reports_dir).with_context(|| {
+                format!("Failed to create reports directory at {:?}", reports_dir)
+            })?;
+
+            // Write to latest.txt
+            let latest_path = reports_dir.join("latest.txt");
+            fs::write(&latest_path, &self.long_changelog)
+                .with_context(|| format!("Failed to write latest report to {:?}", latest_path))?;
+
+            // Write timestamped report
+            let now = Local::now();
+            let timestamp = now.format("%H-%M_%d-%m-%Y").to_string();
+            let report_path = reports_dir.join(format!("report_{}.txt", timestamp));
+            fs::write(&report_path, &self.long_changelog).with_context(|| {
+                format!("Failed to write timestamped report to {:?}", report_path)
+            })?;
+        }
+
         Ok(())
     }
 
-    pub fn parse_response(&mut self, json_str: &str) -> Result<(), Box<dyn Error>> {
-        let response: SoftwareResponse = serde_json::from_str(json_str)?;
-
-        if response.status != "success" {
-            return Err("Response status is not 'success'".into());
-        }
-
-        // Process each software entry
-        for software in response.software {
-            if let Some(existing_version) = self.version_db.get(&software.name) {
-                // If the version is different, create a changelog entry
-                if existing_version != &software.version && software.version != "Unknown" {
-                    self.changelog_entries.push(ChangelogEntry {
-                        name: software.name.clone(),
-                        old_version: existing_version.clone(),
-                        new_version: software.version.clone(),
-                        sources: software.sources.clone(),
-                    });
+    fn read_saved_versions(&self, path: &Path) -> HashMap<String, String> {
+        let mut versions = HashMap::new();
+        if let Ok(content) = fs::read_to_string(path) {
+            for line in content.lines() {
+                let parts: Vec<&str> = line.splitn(2, ": ").collect();
+                if parts.len() == 2 {
+                    versions.insert(parts[0].to_string(), parts[1].to_string());
                 }
             }
-
-            // Update or add the software to the database
-            if software.version != "Unknown" {
-                self.version_db
-                    .insert(software.name.clone(), software.version.clone());
-                self.software_db.insert(software.name.clone(), software);
-            }
         }
+        versions
+    }
+
+    pub fn short_report(&self) -> &str {
+        &self.short_changelog
+    }
+
+    pub fn full_report(&self) -> &str {
+        &self.long_changelog
+    }
+
+    // New method to save report directly to a specified path
+    pub fn save_report_to(&self, path: &str) -> Result<()> {
+        let report = format!(
+            "Update report generated at {}\n\n{}",
+            Local::now().format("%Y-%m-%d %H:%M:%S"),
+            self.full_report()
+        );
+
+        fs::write(path, report).with_context(|| format!("Failed to write report to {}", path))?;
 
         Ok(())
     }
-
-    pub fn generate_short_changelog(&self) -> String {
-        if self.changelog_entries.is_empty() {
-            return "No changes detected.".to_string();
-        }
-
-        let mut changelog = String::new();
-
-        for entry in &self.changelog_entries {
-            changelog.push_str(&format!(
-                "{}: {} -> {}\n",
-                entry.name, entry.old_version, entry.new_version
-            ));
-        }
-
-        changelog
-    }
-
-    pub fn generate_full_changelog(&self) -> String {
-        if self.changelog_entries.is_empty() {
-            return "No changes detected.".to_string();
-        }
-
-        let mut changelog = String::new();
-
-        for entry in &self.changelog_entries {
-            changelog.push_str(&format!("[{}]\n", entry.name));
-            changelog.push_str(&format!("old_version = \"{}\"\n", entry.old_version));
-            changelog.push_str(&format!("new_version = \"{}\"\n", entry.new_version));
-            changelog.push_str("sources = [\n");
-
-            for source in &entry.sources {
-                changelog.push_str(&format!("  \"{}\",\n", source));
-            }
-
-            changelog.push_str("]\n\n");
-        }
-
-        changelog
-    }
-
-    pub fn save_full_changelog(&self) -> Result<(), Box<dyn Error>> {
-        let date = Local::now().format("%Y-%m-%d").to_string();
-        let filename = format!("{}-changelog.toml", date);
-
-        let changelog = self.generate_full_changelog();
-        fs::write(&filename, changelog)?;
-
-        println!("Full changelog saved to {}", filename);
-        Ok(())
-    }
-}
-
-fn main() -> Result<(), Box<dyn Error>> {
-    let json_str = r#"{"status": "success", "software": [{"name": "cwe-client-cli", "version": "0.3.2", "raw_version_info": "\u0412\u0435\u0440\u0441\u0438\u044f cwe-client-cli \u2014 0.3.2.", "token_usage": 887, "token_cost": 0.177, "sources": ["https://aur.archlinux.org/packages/cwe-client-cli", "https://github.com/NotBalds/cwe-client-cli", "https://mynixos.com/nixpkgs/package/cwe-client-cli"]}, {"name": "android", "version": "Unknown", "raw_version_info": "Android 15", "token_usage": 785, "token_cost": 0.157, "sources": ["https://trainings.internshala.com/blog/android-versions/", "https://en.wikipedia.org/wiki/Android_version_history", "https://developer.android.com/about/versions"]}, {"name": "rustlang", "version": "1.45.2", "raw_version_info": "\u0412\u0435\u0440\u0441\u0438\u044f Rustlang \u2014 1.45.2.", "token_usage": 758, "token_cost": 0.152, "sources": ["https://www.rust-lang.org/", "https://github.com/rust-lang/rust/releases", "https://wingetgui.com/apps/Rustlang-rust-gnu-x64"]}, {"name": "nginx", "version": "1.27.4", "raw_version_info": "The most recent version information for nginx is 1.27.4.", "token_usage": 914, "token_cost": 0.183, "sources": ["https://docs.nginx.com/nginx/releases/", "https://nginx.org/en/download.html", "https://github.com/nginx/nginx/releases"]}]}"#;
-
-    // Create version database for testing
-    if !fs::metadata("software.json").is_ok() {
-        let test_versions = HashMap::from([
-            ("cwe-client-cli".to_string(), "0.3.1".to_string()),
-            ("rustlang".to_string(), "1.45.0".to_string()),
-            ("nginx".to_string(), "1.27.3".to_string()),
-        ]);
-        let json = serde_json::to_string_pretty(&test_versions)?;
-        fs::write("software.json", json)?;
-        println!("Created test software.json file");
-    }
-
-    // Initialize generator
-    let mut generator = ChangelogGenerator::new();
-
-    // Load existing versions
-    generator.load_existing_versions("software.json")?;
-
-    // Parse new response
-    generator.parse_response(json_str)?;
-
-    // Generate and print short changelog
-    let short_changelog = generator.generate_short_changelog();
-    println!("Short Changelog:\n{}", short_changelog);
-
-    // Save full changelog to a file
-    generator.save_full_changelog()?;
-
-    // Save updated versions
-    generator.save_updated_versions("software.json")?;
-
-    Ok(())
 }
