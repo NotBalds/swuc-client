@@ -1,24 +1,33 @@
 use anyhow::{Context, Result};
 use chrono::Local;
 use dirs::desktop_dir;
+use notify_rust::{Notification, Timeout};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
 #[derive(Debug, Deserialize)]
-struct PackageInfo {
-    _error: Option<serde_json::Value>,
+struct Package {
+    error: Option<String>,
+    metadata: Option<Metadata>,
     name: String,
     version: String,
     sources: Vec<String>,
-    _metadata: serde_json::Value,
 }
 
+#[derive(Debug, Deserialize)]
+struct Metadata {
+    analysis_time: String,
+    urls_analyzed: u32,
+    urls_searched: u32,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ChangelogGenerator {
     short_changelog: String,
     long_changelog: String,
-    packages: Vec<PackageInfo>,
+    packages: Vec<Package>,
 }
 
 impl ChangelogGenerator {
@@ -60,7 +69,7 @@ impl ChangelogGenerator {
                 // Format short changelog entry
                 let old_display = old_version.map(String::as_str).unwrap_or("");
                 self.short_changelog
-                    .push_str(&format!("{} {} -> {}\n", name, old_display, new_version));
+                    .push_str(&format!("  {} {} -> {}\n", name, old_display, new_version));
 
                 // Format long changelog entry
                 self.long_changelog
@@ -108,6 +117,13 @@ impl ChangelogGenerator {
             fs::write(&report_path, &self.long_changelog).with_context(|| {
                 format!("Failed to write timestamped report to {:?}", report_path)
             })?;
+
+            Notification::new()
+                .summary("SWUC - Short changelog")
+                .body(self.short_report())
+                .timeout(Timeout::Milliseconds(10000))
+                .show()
+                .unwrap();
         }
 
         Ok(())
