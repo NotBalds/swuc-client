@@ -4,15 +4,15 @@ use dirs::desktop_dir;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Debug, Deserialize)]
 struct PackageInfo {
-    error: Option<serde_json::Value>,
+    _error: Option<serde_json::Value>,
     name: String,
     version: String,
     sources: Vec<String>,
-    metadata: serde_json::Value,
+    _metadata: serde_json::Value,
 }
 
 pub struct ChangelogGenerator {
