@@ -26,7 +26,7 @@ cargo build --release
 
 - Linux: `~/.config/swuc/user_config.json`
 - macOS: `~/Library/Application Support/swuc/user_config.json`
-- Windows: `C:\Users\<имя_пользователя>\AppData\Roaming\swuc\config\user_config.json`
+- Windows: `C:\Users\<имя_пользователя>\AppData\Roaming\swuc\SWUC\config\user_config.json`
 
 Пример конфигурации:
 
