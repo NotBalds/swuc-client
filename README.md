@@ -13,7 +13,7 @@ cargo install swuc
 Или сборка из исходного кода:
 
 ```bash
-git clone https://github.com/NotBalds/swuc.git
+git clone https://github.com/NotBalds/swuc-client.git
 cd swuc
 cargo build --release
 ```
