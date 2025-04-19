@@ -14,7 +14,7 @@ cargo install swuc
 
 ```bash
 git clone https://github.com/NotBalds/swuc-client.git
-cd swuc
+cd swuc-client
 cargo build --release
 ```
 
